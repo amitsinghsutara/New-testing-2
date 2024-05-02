@@ -1,0 +1,63 @@
+name: Create Release
+
+on:
+  push:
+    branch: main
+
+jobs:
+  send_to_slack:
+    name: Release Notes 
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.email "amit@sutara.org"
+          git config --global user.name "amitsinghsutara"
+
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Install jq
+        run: sudo apt-get install jq
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run release-it
+        run: npx release-it
+
+      - name: Extract version number
+        id: extract_version_number
+        run: |
+          version=$(jq -r '.version' package.json)
+          echo "::set-output name=version::$version"
+
+      - name: Extract Release Notes
+        id: extract_release_notes
+        uses: ffurrer2/extract-release-notes@v2
+
+      - name: Send to Slack
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*New Release Notes:*\nVersion: v${{ steps.extract_version_number.outputs.version }}\n\n${{ steps.extract_release_notes.outputs.release_notes }}"
+                }
+              }
+            ]
+          }' ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # - name: Create GitHub Release
+      #   uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.TOKEN }}
+      #   with:
+      #     tag_name: v${{ steps.extract_version_number.outputs.version }}
+      #     release_name: Release ${{ steps.extract_version_number.outputs.version}}
+      #     body: ${{ steps.extract_release_notes.outputs.release_notes }}
